@@ -1,10 +1,10 @@
 const pages = [
-  { src: 'sheets/sheet1.jpg', detectionColor: 'red' },
-  { src: 'sheets/sheet2.jpg', detectionColor: 'red' },
-  { src: 'sheets/sheet3.jpg', detectionColor: 'blue' },
-  { src: 'sheets/sheet4.png', detectionColor: 'black' },
-  { src: 'sheets/sheet5.jpg', detectionColor: 'red' },
-  { src: 'sheets/sheet6.jpg', detectionColor: 'red' }
+  { src: 'sheets/sheet1.jpg', detectionColor: 'red', rows: 30 },
+  { src: 'sheets/sheet2.jpg', detectionColor: 'red', rows: 30 },
+  { src: 'sheets/sheet3.jpg', detectionColor: 'blue', rows: 30 },
+  { src: 'sheets/sheet4.png', detectionColor: 'black', rows: 30 },
+  { src: 'sheets/sheet5.jpg', detectionColor: 'red', rows: 30 },
+  { src: 'sheets/sheet6.jpg', detectionColor: 'red', rows: 50 }
 ];
 
 const COLUMNS = 1;
@@ -17,7 +17,6 @@ let maskState = [];
 let originalDetection = []; // 가사가 원래 감지된 위치 저장
 let detectionCanvas = null;
 let detectionCtx = null;
-let zoomLevel = 1.0;
 
 const sheetImage = document.getElementById('sheetImage');
 const sheetWrapper = document.querySelector('.sheet-wrapper');
@@ -25,9 +24,6 @@ const prevBtn = document.getElementById('prevBtn');
 const nextBtn = document.getElementById('nextBtn');
 const resetBtn = document.getElementById('resetBtn');
 const pageInfo = document.getElementById('pageInfo');
-const zoomInBtn = document.getElementById('zoomInBtn');
-const zoomOutBtn = document.getElementById('zoomOutBtn');
-const zoomResetBtn = document.getElementById('zoomResetBtn');
 
 function init() {
   detectionCanvas = document.createElement('canvas');
@@ -68,15 +64,16 @@ function detectColoredText() {
   const imageData = detectionCtx.getImageData(0, 0, imgWidth, imgHeight);
   const pixels = imageData.data;
   
-  maskState = Array(ROWS).fill(null).map(() => Array(COLUMNS).fill(false));
-  originalDetection = Array(ROWS).fill(null).map(() => Array(COLUMNS).fill(false));
+  const currentRows = page.rows || ROWS;
+  maskState = Array(currentRows).fill(null).map(() => Array(COLUMNS).fill(false));
+  originalDetection = Array(currentRows).fill(null).map(() => Array(COLUMNS).fill(false));
   
   const cellWidth = imgWidth / COLUMNS;
-  const cellHeight = imgHeight / ROWS;
+  const cellHeight = imgHeight / currentRows;
   
   let totalColoredCells = 0;
   
-  for (let row = 0; row < ROWS; row++) {
+  for (let row = 0; row < currentRows; row++) {
     for (let col = 0; col < COLUMNS; col++) {
       let coloredPixelCount = 0;
       let totalPixels = 0;
@@ -175,11 +172,14 @@ function detectColoredText() {
 function renderMask() {
   document.querySelectorAll('.mask-cell').forEach(el => el.remove());
   
+  const page = pages[currentPage];
+  const currentRows = page.rows || ROWS;
+  
   const imgWidth = sheetImage.offsetWidth;
   const imgHeight = sheetImage.offsetHeight;
   
   const cellWidth = imgWidth / COLUMNS;
-  const cellHeight = imgHeight / ROWS;
+  const cellHeight = imgHeight / currentRows;
   
   let renderedCount = 0;
   
@@ -187,14 +187,14 @@ function renderMask() {
   const isSheet4 = currentPage === 3;
   const rowOffset = isSheet4 ? 2 : 0;
   
-  for (let row = 0; row < ROWS; row++) {
+  for (let row = 0; row < currentRows; row++) {
     for (let col = 0; col < COLUMNS; col++) {
       if (maskState[row][col]) {
         // 4번째 곡의 경우 실제 렌더링 위치를 2줄 아래로
         const renderRow = row + rowOffset;
         
         // 범위를 벗어나면 렌더링하지 않음
-        if (renderRow >= ROWS) continue;
+        if (renderRow >= currentRows) continue;
         
         const maskDiv = document.createElement('div');
         maskDiv.className = 'mask-cell';
@@ -233,21 +233,6 @@ function setupEventListeners() {
   
   resetBtn.addEventListener('click', () => {
     detectColoredText();
-  });
-
-  zoomInBtn.addEventListener('click', () => {
-    zoomLevel = Math.min(3.0, zoomLevel + 0.2);
-    applyZoom();
-  });
-
-  zoomOutBtn.addEventListener('click', () => {
-    zoomLevel = Math.max(0.5, zoomLevel - 0.2);
-    applyZoom();
-  });
-
-  zoomResetBtn.addEventListener('click', () => {
-    zoomLevel = 1.0;
-    applyZoom();
   });
   
   sheetWrapper.addEventListener('pointerdown', handlePointerDown);
@@ -303,19 +288,19 @@ function handlePointerUp() {
 }
 
 function updateCurtainEffect(e) {
-  const wrapperRect = sheetWrapper.getBoundingClientRect();
-  const imgRect = sheetImage.getBoundingClientRect();
+  const page = pages[currentPage];
+  const currentRows = page.rows || ROWS;
   
-  // transform이 적용된 좌표를 원래 좌표로 변환
-  const x = (e.clientX - imgRect.left) / zoomLevel;
-  const y = (e.clientY - imgRect.top) / zoomLevel;
+  const imgRect = sheetImage.getBoundingClientRect();
+  const x = e.clientX - imgRect.left;
+  const y = e.clientY - imgRect.top;
   const imgWidth = sheetImage.offsetWidth;
   const imgHeight = sheetImage.offsetHeight;
   
   const col = Math.floor((x / imgWidth) * COLUMNS);
-  const row = Math.floor((y / imgHeight) * ROWS);
+  const row = Math.floor((y / imgHeight) * currentRows);
   
-  if (row >= 0 && row < ROWS && col >= 0 && col < COLUMNS) {
+  if (row >= 0 && row < currentRows && col >= 0 && col < COLUMNS) {
     const cellWidth = imgWidth / COLUMNS;
     const cellLeft = col * cellWidth;
     const xInCell = x - cellLeft;
@@ -378,12 +363,6 @@ function updatePageInfo() {
 function updateNavButtons() {
   prevBtn.disabled = currentPage === 0;
   nextBtn.disabled = currentPage === pages.length - 1;
-}
-
-function applyZoom() {
-  sheetWrapper.style.transform = `scale(${zoomLevel})`;
-  sheetWrapper.style.transformOrigin = 'top left';
-  zoomResetBtn.textContent = `${Math.round(zoomLevel * 100)}%`;
 }
 
 init();
