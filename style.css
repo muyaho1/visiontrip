@@ -67,16 +67,15 @@ button:disabled {
     padding: 20px;
     border-radius: 8px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    overflow: hidden;
+    overflow: auto;
+    max-height: 85vh;
 }
 
 .sheet-wrapper {
     position: relative;
     display: inline-block;
-    width: 100%;
     touch-action: none;
-    overflow: auto;
-    max-height: 85vh;
+    transform-origin: top left;
 }
 
 #sheetImage {
@@ -87,7 +86,7 @@ button:disabled {
     user-select: none;
     -webkit-user-drag: none;
     transform-origin: top left;
-    transition: transform 0.2s ease;
+}
 }
 
 .mask-cell {
