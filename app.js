@@ -303,9 +303,12 @@ function handlePointerUp() {
 }
 
 function updateCurtainEffect(e) {
+  const wrapperRect = sheetWrapper.getBoundingClientRect();
   const imgRect = sheetImage.getBoundingClientRect();
-  const x = e.clientX - imgRect.left;
-  const y = e.clientY - imgRect.top;
+  
+  // transform이 적용된 좌표를 원래 좌표로 변환
+  const x = (e.clientX - imgRect.left) / zoomLevel;
+  const y = (e.clientY - imgRect.top) / zoomLevel;
   const imgWidth = sheetImage.offsetWidth;
   const imgHeight = sheetImage.offsetHeight;
   
