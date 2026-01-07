@@ -18,9 +18,6 @@ let originalDetection = []; // 가사가 원래 감지된 위치 저장
 let detectionCanvas = null;
 let detectionCtx = null;
 let zoomLevel = 1.0;
-let initialPinchDistance = 0;
-let initialZoomLevel = 1.0;
-let isPinching = false;
 
 const sheetImage = document.getElementById('sheetImage');
 const sheetWrapper = document.querySelector('.sheet-wrapper');
@@ -259,10 +256,9 @@ function setupEventListeners() {
   sheetWrapper.addEventListener('pointerleave', handlePointerUp);
   sheetWrapper.addEventListener('pointercancel', handlePointerUp);
   
-  sheetWrapper.addEventListener('touchstart', handleTouchStart, { passive: false });
-  sheetWrapper.addEventListener('touchmove', handleTouchMove, { passive: false });
-  sheetWrapper.addEventListener('touchend', handleTouchEnd, { passive: false });
-
+  sheetWrapper.addEventListener('touchstart', (e) => e.preventDefault(), { passive: false });
+  sheetWrapper.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
+  
   window.addEventListener('resize', () => {
     if (sheetImage.complete && maskState.length > 0) {
       renderMask();
@@ -382,68 +378,9 @@ function updateNavButtons() {
 }
 
 function applyZoom() {
-  sheetImage.style.transformOrigin = 'top left';
-  sheetImage.style.transform = `scale(${zoomLevel})`;
+  sheetWrapper.style.transform = `scale(${zoomLevel})`;
+  sheetWrapper.style.transformOrigin = 'top left';
   zoomResetBtn.textContent = `${Math.round(zoomLevel * 100)}%`;
-  
-  // 줌 시 wrapper 크기 조정
-  const naturalWidth = sheetImage.naturalWidth;
-  const naturalHeight = sheetImage.naturalHeight;
-  if (naturalWidth && naturalHeight) {
-    sheetWrapper.style.width = `${naturalWidth * zoomLevel}px`;
-    sheetWrapper.style.height = `${naturalHeight * zoomLevel}px`;
-  }
-  
-  if (maskState.length > 0) {
-    renderMask();
-  }
-}
-
-function handleTouchStart(e) {
-  if (e.touches.length === 2) {
-    // 핀치 제스처 시작
-    e.preventDefault();
-    isPinching = true;
-    initialPinchDistance = calculateDistance(e.touches[0], e.touches[1]);
-    initialZoomLevel = zoomLevel;
-  } else if (e.touches.length === 1 && !isPinching) {
-    // 단일 터치 드래그는 기존 로직 사용
-    handlePointerDown({
-      clientX: e.touches[0].clientX,
-      clientY: e.touches[0].clientY
-    });
-  }
-}
-
-function handleTouchMove(e) {
-  if (isPinching && e.touches.length === 2) {
-    e.preventDefault();
-    const currentDistance = calculateDistance(e.touches[0], e.touches[1]);
-    const scale = currentDistance / initialPinchDistance;
-    zoomLevel = Math.max(0.5, Math.min(3.0, initialZoomLevel * scale));
-    applyZoom();
-  } else if (e.touches.length === 1 && !isPinching) {
-    handlePointerMove({
-      clientX: e.touches[0].clientX,
-      clientY: e.touches[0].clientY,
-      movementX: e.touches[0].clientX - (e.touches[0].pageX || e.touches[0].clientX)
-    });
-  }
-}
-
-function handleTouchEnd(e) {
-  if (e.touches.length < 2) {
-    isPinching = false;
-  }
-  if (e.touches.length === 0) {
-    handlePointerUp();
-  }
-}
-
-function calculateDistance(touch1, touch2) {
-  const dx = touch1.clientX - touch2.clientX;
-  const dy = touch1.clientY - touch2.clientY;
-  return Math.sqrt(dx * dx + dy * dy);
 }
 
 init();
