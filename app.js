@@ -14,8 +14,10 @@ let currentPage = 0;
 let isDragging = false;
 let dragDirection = 0;
 let maskState = [];
+let originalDetection = []; // 가사가 원래 감지된 위치 저장
 let detectionCanvas = null;
 let detectionCtx = null;
+let zoomLevel = 1.0;
 
 const sheetImage = document.getElementById('sheetImage');
 const sheetWrapper = document.querySelector('.sheet-wrapper');
@@ -23,6 +25,9 @@ const prevBtn = document.getElementById('prevBtn');
 const nextBtn = document.getElementById('nextBtn');
 const resetBtn = document.getElementById('resetBtn');
 const pageInfo = document.getElementById('pageInfo');
+const zoomInBtn = document.getElementById('zoomInBtn');
+const zoomOutBtn = document.getElementById('zoomOutBtn');
+const zoomResetBtn = document.getElementById('zoomResetBtn');
 
 function init() {
   detectionCanvas = document.createElement('canvas');
@@ -64,6 +69,7 @@ function detectColoredText() {
   const pixels = imageData.data;
   
   maskState = Array(ROWS).fill(null).map(() => Array(COLUMNS).fill(false));
+  originalDetection = Array(ROWS).fill(null).map(() => Array(COLUMNS).fill(false));
   
   const cellWidth = imgWidth / COLUMNS;
   const cellHeight = imgHeight / ROWS;
@@ -156,6 +162,7 @@ function detectColoredText() {
       const coloredRatio = coloredPixelCount / totalPixels;
       if (coloredRatio > 0.005) {
         maskState[row][col] = true;
+        originalDetection[row][col] = true; // 가사가 감지된 위치 저장
         totalColoredCells++;
       }
     }
@@ -227,6 +234,21 @@ function setupEventListeners() {
   resetBtn.addEventListener('click', () => {
     detectColoredText();
   });
+
+  zoomInBtn.addEventListener('click', () => {
+    zoomLevel = Math.min(3.0, zoomLevel + 0.2);
+    applyZoom();
+  });
+
+  zoomOutBtn.addEventListener('click', () => {
+    zoomLevel = Math.max(0.5, zoomLevel - 0.2);
+    applyZoom();
+  });
+
+  zoomResetBtn.addEventListener('click', () => {
+    zoomLevel = 1.0;
+    applyZoom();
+  });
   
   sheetWrapper.addEventListener('pointerdown', handlePointerDown);
   sheetWrapper.addEventListener('pointermove', handlePointerMove);
@@ -297,46 +319,50 @@ function updateCurtainEffect(e) {
     const percentage = Math.max(0, Math.min(100, (xInCell / cellWidth) * 100));
     
     if (dragDirection > 0) {
-      // 오른쪽 드래그: 왼쪽부터 벗기기 (왼쪽을 clipPath로 가림)
-      const maskDiv = document.querySelector(`.mask-cell[data-row="${row}"][data-col="${col}"]`);
-      if (maskDiv) {
-        // percentage가 100에 가까워질수록 더 많이 벗겨짐
-        // inset(0 0 0 X%) = 왼쪽에서 X%만큼 잘라냄
-        maskDiv.style.clipPath = `inset(0 0 0 ${percentage}%)`;
+      // 오른쪽 드래그: 왼쪽부터 벗기기 (가사가 있는 영역에만)
+      if (originalDetection[row][col]) {
+        const maskDiv = document.querySelector(`.mask-cell[data-row="${row}"][data-col="${col}"]`);
+        if (maskDiv) {
+          // percentage가 100에 가까워질수록 더 많이 벗겨짐
+          // inset(0 0 0 X%) = 왼쪽에서 X%만큼 잘라냄
+          maskDiv.style.clipPath = `inset(0 0 0 ${percentage}%)`;
+        }
       }
     } else {
-      // 왼쪽 드래그: 오른쪽부터 가리기 (오른쪽을 clipPath로 가림)
-      let maskDiv = document.querySelector(`.mask-cell[data-row="${row}"][data-col="${col}"]`);
-      
-      if (!maskDiv) {
-        maskState[row][col] = true;
-        const cellHeight = imgHeight / ROWS;
+      // 왼쪽 드래그: 오른쪽부터 가리기 (가사가 있는 영역에만)
+      if (originalDetection[row][col]) {
+        let maskDiv = document.querySelector(`.mask-cell[data-row="${row}"][data-col="${col}"]`);
         
-        maskDiv = document.createElement('div');
-        maskDiv.className = 'mask-cell';
-        maskDiv.style.position = 'absolute';
-        maskDiv.style.left = (col * cellWidth) + 'px';
-        maskDiv.style.top = (row * cellHeight) + 'px';
-        maskDiv.style.width = cellWidth + 'px';
-        maskDiv.style.height = cellHeight + 'px';
-        maskDiv.style.backgroundColor = 'rgba(0, 0, 0, 1)';
-        maskDiv.style.borderRadius = '4px';
-        maskDiv.style.pointerEvents = 'none';
-        maskDiv.dataset.row = row;
-        maskDiv.dataset.col = col;
+        if (!maskDiv) {
+          maskState[row][col] = true;
+          const cellHeight = imgHeight / ROWS;
+          
+          maskDiv = document.createElement('div');
+          maskDiv.className = 'mask-cell';
+          maskDiv.style.position = 'absolute';
+          maskDiv.style.left = (col * cellWidth) + 'px';
+          maskDiv.style.top = (row * cellHeight) + 'px';
+          maskDiv.style.width = cellWidth + 'px';
+          maskDiv.style.height = cellHeight + 'px';
+          maskDiv.style.backgroundColor = 'rgba(0, 0, 0, 1)';
+          maskDiv.style.borderRadius = '4px';
+          maskDiv.style.pointerEvents = 'none';
+          maskDiv.dataset.row = row;
+          maskDiv.dataset.col = col;
+          
+          sheetWrapper.appendChild(maskDiv);
+        }
         
-        sheetWrapper.appendChild(maskDiv);
-      }
-      
-      // percentage가 작아질수록 더 많이 가려짐
-      // inset(0 Y% 0 0) = 오른쪽에서 Y%만큼 잘라냄
-      if (percentage <= 1) {
-        // 왼쪽 끝까지 왔으면 완전히 표시
-        maskDiv.style.clipPath = '';
-      } else {
-        // percentage: 커서의 X 위치 (0~100%)
-        // 왼쪽 드래그이므로 커서 오른쪽을 잘라냄
-        maskDiv.style.clipPath = `inset(0 ${100 - percentage}% 0 0)`;
+        // percentage가 작아질수록 더 많이 가려짐
+        // inset(0 Y% 0 0) = 오른쪽에서 Y%만큼 잘라냄
+        if (percentage <= 1) {
+          // 왼쪽 끝까지 왔으면 완전히 표시
+          maskDiv.style.clipPath = '';
+        } else {
+          // percentage: 커서의 X 위치 (0~100%)
+          // 왼쪽 드래그이므로 커서 오른쪽을 잘라냄
+          maskDiv.style.clipPath = `inset(0 ${100 - percentage}% 0 0)`;
+        }
       }
     }
   }
@@ -349,6 +375,15 @@ function updatePageInfo() {
 function updateNavButtons() {
   prevBtn.disabled = currentPage === 0;
   nextBtn.disabled = currentPage === pages.length - 1;
+}
+
+function applyZoom() {
+  sheetImage.style.transform = `scale(${zoomLevel})`;
+  zoomResetBtn.textContent = `${Math.round(zoomLevel * 100)}%`;
+  // 확대/축소 후 마스크 위치 재조정
+  if (maskState.length > 0) {
+    renderMask();
+  }
 }
 
 init();
